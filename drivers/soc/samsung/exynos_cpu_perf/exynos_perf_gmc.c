@@ -60,6 +60,10 @@ static int cl1_max_sse = GAME_NORMAL_CL1_MAX_SSE;
 
 static int prev_is_game = 0;
 
+static unsigned int custom_gpu_freq = 0;
+static unsigned int custom_gpu_uv = 0;
+
+
 static unsigned int custom_cl1_freq = 0;  // nova variável para frequência custom
 
 static struct pm_qos_request pm_qos_cl2_max;
@@ -111,6 +115,13 @@ static int gmc_thread(void *data)
  emstune_add_request(&emstune_req_gmc);
 
  while (is_running) {
+
+    if (custom_gpu_freq > 0)
+        cal_dfs_set_rate(cal_id_g3d, custom_gpu_freq);
+
+    if (custom_gpu_uv > 0)
+        cal_dfs_set_voltage(cal_id_g3d, custom_gpu_uv);
+
 
   // cpu util
   cpu_util_avg = 0;
@@ -359,6 +370,9 @@ static struct kobj_attribute custom_cl1_freq_attr = __ATTR(custom_cl1_freq, 0644
 
 static struct kobject *gmc_kobj;
 static struct attribute *gmc_attrs[] = {
+	&custom_gpu_freq_attr.attr,
+	&custom_gpu_uv_attr.attr,
+
  &run_attr.attr,
  &polling_ms_attr.attr,
  &bind_cpu_attr.attr,
