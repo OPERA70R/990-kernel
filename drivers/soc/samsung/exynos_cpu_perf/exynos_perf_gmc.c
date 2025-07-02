@@ -120,7 +120,7 @@ static int gmc_thread(void *data)
         cal_dfs_set_rate(cal_id_g3d, custom_gpu_freq);
 
     if (custom_gpu_uv > 0)
-        cal_dfs_set_voltage(cal_id_g3d, custom_gpu_uv);
+        cal_dfs_set_volt(cal_id_g3d, custom_gpu_uv);
 
 
   // cpu util
