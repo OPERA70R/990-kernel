@@ -27,8 +27,14 @@
 #include <linux/cpumask.h>
 #include <linux/kernel.h>
 
+// Stub implementation for cal_dfs_set_volt if not available
 #ifndef cal_dfs_set_volt
-int cal_dfs_set_volt(unsigned int id, unsigned int volt);
+static int cal_dfs_set_volt(unsigned int id, unsigned int volt)
+{
+    // Stub implementation - replace with actual function call if available
+    pr_info("[%s] cal_dfs_set_volt stub called with id=%u, volt=%u\n", "exynos_perf", id, volt);
+    return 0; // Return success for stub
+}
 #endif
 
 #define GAME_NORMAL_CL2_MAX 1690000
