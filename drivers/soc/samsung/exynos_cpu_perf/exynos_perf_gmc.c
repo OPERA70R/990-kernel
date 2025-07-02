@@ -27,6 +27,10 @@
 #include <linux/cpumask.h>
 #include <linux/kernel.h>
 
+#ifndef cal_dfs_set_volt
+int cal_dfs_set_volt(unsigned int id, unsigned int volt);
+#endif
+
 #define GAME_NORMAL_CL2_MAX 1690000
 #define GAME_NORMAL_CL1_MAX 2314000
 #define GAME_NORMAL_CL1_MAX_SSE 2314000
@@ -62,8 +66,6 @@ static int prev_is_game = 0;
 
 static unsigned int custom_gpu_freq = 0;
 static unsigned int custom_gpu_uv = 0;
-
-
 static unsigned int custom_cl1_freq = 0;  // nova variável para frequência custom
 
 static struct pm_qos_request pm_qos_cl2_max;
@@ -122,8 +124,6 @@ static int gmc_thread(void *data)
     if (custom_gpu_uv > 0)
         cal_dfs_set_volt(cal_id_g3d, custom_gpu_uv);
 
-
-  // cpu util
   cpu_util_avg = 0;
   online_cpus = 0;
   for_each_online_cpu(cpu) {
@@ -135,15 +135,12 @@ static int gmc_thread(void *data)
   else
     cpu_util_avg = 0; // evita divisão por zero
 
-  // gpu
   gpu_util = gpu_dvfs_get_utilization();
   gpu_freq = (uint)cal_dfs_cached_get_rate(cal_id_g3d);
   sus_array[0] = gpu_dvfs_get_sustainable_info_array(0);
   sus_array[1] = gpu_dvfs_get_sustainable_info_array(1);
   gpu_max_lock = gpu_dvfs_get_max_lock();
 
-  //pr_info("[%s] gmc -----> time:%ds cpu_util_avg:%d gpu_util:%d gpu_freq:%d / sus_array0:%d sus_array1:%d gpu_maxlock:%d\n", 
-  //      prefix, time_cnt++, cpu_util_avg, gpu_util, gpu_freq, sus_array[0], sus_array[1], gpu_max_lock);
   time_cnt++;
 
   if (is_game) {
@@ -183,7 +180,6 @@ static int gmc_thread(void *data)
       cl1_max = cl1_max_org;
     }
 
-    // Se não estiver usando frequência customizada, atualiza pm_qos
     if (custom_cl1_freq == 0)
       pm_qos_update_request(&pm_qos_cl1_max, cl1_max);
 
@@ -194,7 +190,6 @@ static int gmc_thread(void *data)
       pr_info("[%s] gmc >> sus time=%d", prefix, time_cnt);
       pm_qos_update_request(&pm_qos_cl2_max, PM_QOS_CLUSTER2_FREQ_MAX_DEFAULT_VALUE);
       pm_qos_update_request(&pm_qos_cl1_max, PM_QOS_CLUSTER1_FREQ_MAX_DEFAULT_VALUE);
-      //pm_qos_update_request(&pm_qos_cl1_max, 1898000);
       pm_qos_update_request(&pm_qos_cl0_max, PM_QOS_CLUSTER0_FREQ_MAX_DEFAULT_VALUE);
       pm_qos_update_request(&pm_qos_mif_max, PM_QOS_BUS_THROUGHPUT_MAX_DEFAULT_VALUE);
       pm_qos_update_request(&pm_qos_mif_min, PM_QOS_BUS_THROUGHPUT_DEFAULT_VALUE);
@@ -206,14 +201,12 @@ static int gmc_thread(void *data)
       pm_qos_update_request(&pm_qos_mif_min, PM_QOS_BUS_THROUGHPUT_DEFAULT_VALUE);
     }
 
-    // Se não estiver usando frequência customizada, garantir uso cl1_max padrão
     if (custom_cl1_freq == 0)
       pm_qos_update_request(&pm_qos_cl1_max, cl1_max);
 
     prev_is_game = 0;
   }
 
-  // Se estiver usando frequência custom, mantém o request
   if (custom_cl1_freq > 0)
     pm_qos_update_request(&pm_qos_cl1_max, custom_cl1_freq);
 
@@ -230,7 +223,6 @@ static void gmc_start(void)
   pr_err("[%s] already running!!\n", prefix);
   return;
  }
- // run
  task = kthread_create(gmc_thread, NULL, "exynos_gmc_thread%u", 0);
  if (IS_ERR(task)) {
    pr_err("[%s] failed to create gmc thread\n", prefix);
@@ -348,15 +340,12 @@ static ssize_t store_custom_cl1_freq(struct kobject *k, struct kobj_attribute *a
     unsigned int val;
     if (sscanf(buf, "%u", &val) != 1)
         return -EINVAL;
-
     custom_cl1_freq = val;
 
     if (custom_cl1_freq > 0) {
-        // força usar frequência custom
         pm_qos_update_request(&pm_qos_cl1_max, custom_cl1_freq);
         pr_info("[%s] custom_cl1_freq set to %u\n", prefix, custom_cl1_freq);
     } else {
-        // volta ao controle normal
         pm_qos_update_request(&pm_qos_cl1_max, cl1_max);
         pr_info("[%s] custom_cl1_freq disabled, reverted to cl1_max %d\n", prefix, cl1_max);
     }
@@ -365,29 +354,62 @@ static ssize_t store_custom_cl1_freq(struct kobject *k, struct kobj_attribute *a
 
 static struct kobj_attribute custom_cl1_freq_attr = __ATTR(custom_cl1_freq, 0644, show_custom_cl1_freq, store_custom_cl1_freq);
 
+// custom_gpu_freq: freq fixa custom via sysfs
+static ssize_t show_custom_gpu_freq(struct kobject *k, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%u\n", custom_gpu_freq);
+}
+
+static ssize_t store_custom_gpu_freq(struct kobject *k, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+    unsigned int val;
+    if (sscanf(buf, "%u", &val) != 1)
+        return -EINVAL;
+    custom_gpu_freq = val;
+    return count;
+}
+
+static struct kobj_attribute custom_gpu_freq_attr = __ATTR(custom_gpu_freq, 0644, show_custom_gpu_freq, store_custom_gpu_freq);
+
+// custom_gpu_uv: tensão custom via sysfs
+static ssize_t show_custom_gpu_uv(struct kobject *k, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%u\n", custom_gpu_uv);
+}
+
+static ssize_t store_custom_gpu_uv(struct kobject *k, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+    unsigned int val;
+    if (sscanf(buf, "%u", &val) != 1)
+        return -EINVAL;
+    custom_gpu_uv = val;
+    return count;
+}
+
+static struct kobj_attribute custom_gpu_uv_attr = __ATTR(custom_gpu_uv, 0644, show_custom_gpu_uv, store_custom_gpu_uv);
+
 /*--------------------------------------*/
 // MAIN
 
 static struct kobject *gmc_kobj;
 static struct attribute *gmc_attrs[] = {
-	&custom_gpu_freq_attr.attr,
-	&custom_gpu_uv_attr.attr,
-
- &run_attr.attr,
- &polling_ms_attr.attr,
- &bind_cpu_attr.attr,
- &is_game_attr.attr,
- &cl2_max_attr.attr,
- &cl1_max_attr.attr,
- &cl1_max_sse_attr.attr,
- &cl0_max_attr.attr,
- &mif_max_attr.attr,
- &mif_min_attr.attr,
- &gpu_lite_attr.attr,
- &maxlock_delay_sec_attr.attr,
- &ta_sse_ur_thd_attr.attr,
- &custom_cl1_freq_attr.attr,    // Adicionado freq custom
- NULL
+    &custom_gpu_freq_attr.attr,
+    &custom_gpu_uv_attr.attr,
+    &run_attr.attr,
+    &polling_ms_attr.attr,
+    &bind_cpu_attr.attr,
+    &is_game_attr.attr,
+    &cl2_max_attr.attr,
+    &cl1_max_attr.attr,
+    &cl1_max_sse_attr.attr,
+    &cl0_max_attr.attr,
+    &mif_max_attr.attr,
+    &mif_min_attr.attr,
+    &gpu_lite_attr.attr,
+    &maxlock_delay_sec_attr.attr,
+    &ta_sse_ur_thd_attr.attr,
+    &custom_cl1_freq_attr.attr,
+    NULL
 };
 static struct attribute_group gmc_group = {
  .attrs = gmc_attrs,
