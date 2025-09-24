@@ -1,4 +1,4 @@
-name: R8S UI7
+name: Z3S UI7
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
       - name: Build Kernel
         run: |
           chmod +x ./build.sh
-          ./build.sh -m r8s -k n
+          ./build.sh -m z3s -k n
 
       - name: Find built zips
         id: find_zips
